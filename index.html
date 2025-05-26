@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DST File Merger</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>DST File Merger</h1>
+        <p>Enter a word to generate a combined embroidery design:</p>
+        
+        <div class="input-group">
+            <input type="text" id="wordInput" placeholder="Enter your word" maxlength="20">
+            <button id="generateBtn">Generate DST</button>
+        </div>
+        
+        <div id="message" class="message"></div>
+        
+        <div class="instructions">
+            <h3>Instructions:</h3>
+            <ul>
+                <li>Enter any word (letters A-Z)</li>
+                <li>Click "Generate DST"</li>
+                <li>Download the combined embroidery design</li>
+            </ul>
+            <p>Note: Only uppercase letters are supported. Other characters will be ignored.</p>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
