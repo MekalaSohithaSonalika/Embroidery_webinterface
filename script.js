@@ -3,18 +3,32 @@ document.addEventListener('DOMContentLoaded', function() {
     const generateBtn = document.getElementById('generateBtn');
     const messageDiv = document.getElementById('message');
     
-    // Map of letters to their DST file paths
-    const letterFiles = {
-        'A': './letters/A.dst',
-        'B': './letters/B.dst',
-        'C': './letters/C.dst',
-        'D': './letters/D.dst',
-        'E': './letters/E.dst',
-        'F': './letters/F.dst'
-    };
-    for (let i = 0; i < 26; i++) {
-        const letter = String.fromCharCode(65 + i); // A-Z
-        letterFiles[letter] = `./letters/${letter}.dst`;
+    // Function to get the appropriate letter files based on word length
+    function getLetterFiles(wordLength) {
+        let size;
+        let useSimpleFilename = false;
+        
+        // Special handling for sizes 11 and 12
+        if (wordLength >= 11 && wordLength <= 12) {
+            size = '1112';
+            useSimpleFilename = true;  // Flag for simple filenames in letters1112 folder
+        } else {
+            // Clamp word length between 1 and 10
+            size = Math.min(Math.max(wordLength, 1), 10);
+        }
+        
+        const letterFiles = {};
+        
+        // Generate paths for A-Z for the specific size folder
+        for (let i = 0; i < 26; i++) {
+            const letter = String.fromCharCode(65 + i); // A-Z
+            // Use simple filename for letters1112 folder, numbered filename for others
+            letterFiles[letter] = useSimpleFilename ? 
+                `./letters${size}/${letter}.dst` : 
+                `./letters${size}/${letter}${size}.dst`;
+        }
+        
+        return letterFiles;
     }
     
     generateBtn.addEventListener('click', async function() {
@@ -25,15 +39,24 @@ document.addEventListener('DOMContentLoaded', function() {
             showMessage('Please enter at least one valid letter (A-Z)', 'error');
             return;
         }
+
+        // Update max length to 12
+        if (validLetters.length > 12) {
+            showMessage('Maximum 12 letters allowed', 'error');
+            return;
+        }
         
         showMessage('Processing... Please wait', 'success');
         
         try {
+            // Get letter files based on word length
+            const letterFiles = getLetterFiles(validLetters.length);
+            
             // Load all required DST files
             const dstPromises = validLetters.map(letter => 
                 fetch(letterFiles[letter])
                     .then(response => {
-                        if (!response.ok) throw new Error(`File not found: ${letter}.dst`);
+                        if (!response.ok) throw new Error(`File not found: ${letter}.dst for size ${validLetters.length}`);
                         return response.arrayBuffer();
                     })
             );
@@ -78,35 +101,50 @@ document.addEventListener('DOMContentLoaded', function() {
             return { header, stitches };
         });
         
-        // Process stitches (remove END markers)
+        // Process stitches (remove all color changes)
         const processedStitches = headersAndStitches.map(({ stitches }) => {
             const stitchesArray = new Uint8Array(stitches);
-            if (stitchesArray.length >= 3 && 
-                stitchesArray[stitchesArray.length - 3] === 0x00 &&
-                stitchesArray[stitchesArray.length - 2] === 0x00 &&
-                stitchesArray[stitchesArray.length - 1] === 0xF3) {
-                return stitchesArray.slice(0, -3);
+            const processedArray = [];
+            
+            for (let i = 0; i < stitchesArray.length; i += 3) {
+                // Skip color change commands (F0)
+                if (stitchesArray[i + 2] === 0xF0) {
+                    continue;
+                }
+                // Skip end markers (F3)
+                if (stitchesArray[i + 2] === 0xF3) {
+                    continue;
+                }
+                // Keep regular stitch commands
+                processedArray.push(stitchesArray[i], stitchesArray[i + 1], stitchesArray[i + 2]);
             }
-            return stitchesArray;
+            
+            return new Uint8Array(processedArray);
         });
         
-        // Combine all stitches
+        // Calculate total length for merged stitches
         let mergedStitchesLength = processedStitches.reduce((sum, stitches) => sum + stitches.length, 0);
-        // Add 3 bytes for the final END marker
-        mergedStitchesLength += 3;
+        // Add space for initial color change (3 bytes) and end marker (3 bytes)
+        mergedStitchesLength += 6;
         
         const mergedStitches = new Uint8Array(mergedStitchesLength);
         let offset = 0;
         
+        // Add single color change at start
+        mergedStitches[offset++] = 0x00;
+        mergedStitches[offset++] = 0x00;
+        mergedStitches[offset++] = 0xF0;  // Color change command
+        
+        // Combine all stitches
         processedStitches.forEach(stitches => {
             mergedStitches.set(stitches, offset);
             offset += stitches.length;
         });
         
-        // Add END marker
+        // Add end marker
         mergedStitches[offset++] = 0x00;
         mergedStitches[offset++] = 0x00;
-        mergedStitches[offset++] = 0xF3;
+        mergedStitches[offset++] = 0xF3;  // End marker
         
         // Combine header from first file with merged stitches
         const firstHeader = new Uint8Array(headersAndStitches[0].header);
